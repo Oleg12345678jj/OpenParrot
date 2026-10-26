@@ -2080,13 +2080,7 @@ else if (
         );
     }
 }
-				MenuHack = false;
-				MenuHackStopWriting = false;
-
-				injector::WriteMemory((0x78A27 + BaseAddress9), 0x03448689, true);
-				injector::WriteMemory((0x78A2B + BaseAddress9), 0x8E890000, true);
-			}
-		}
+				
 
 if (MenuHack)
 {
