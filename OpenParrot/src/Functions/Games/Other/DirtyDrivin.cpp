@@ -42,6 +42,69 @@ static bool previousVolMax = false;
 static bool MenuHack = false;
 static bool RiptideHack = false;
 static bool MenuHackStopWriting = false;
+static int DirtyMenuPosition = 7;
+static bool DirtyMenuLeftWasDown = false;
+static bool DirtyMenuRightWasDown = false;
+
+static const BYTE DirtyMenuValues[15] =
+{
+    0x10,
+    0x01,
+    0x03,
+    0x05,
+    0x06,
+    0x04,
+    0x00,
+    0x02,
+    0x0B,
+    0x09,
+    0x0E,
+    0x0D,
+    0x08,
+    0x0C,
+    0x0A
+};
+
+static int DirtyMenuValueToPosition(BYTE value)
+{
+    for (int i = 0; i < 15; ++i)
+    {
+        if (DirtyMenuValues[i] == value)
+            return i;
+    }
+
+    return -1;
+}
+
+static int DirtyWheelToMenuPosition(int wheelValue)
+{
+    if (wheelValue >= 0xEE) return 14;
+    if (wheelValue >= 0xDD) return 13;
+    if (wheelValue >= 0xCC) return 12;
+    if (wheelValue >= 0xBB) return 11;
+    if (wheelValue >= 0xAA) return 10;
+    if (wheelValue >= 0x99) return 9;
+    if (wheelValue >= 0x88) return 8;
+    if (wheelValue >= 0x77) return 7;
+    if (wheelValue >= 0x66) return 6;
+    if (wheelValue >= 0x55) return 5;
+    if (wheelValue >= 0x44) return 4;
+    if (wheelValue >= 0x33) return 3;
+    if (wheelValue >= 0x22) return 2;
+    if (wheelValue >= 0x11) return 1;
+    return 0;
+}
+
+static void DirtyWriteMenuPosition()
+{
+    if (DirtyMenuPosition < 0)
+        DirtyMenuPosition = 0;
+    else if (DirtyMenuPosition > 14)
+        DirtyMenuPosition = 14;
+
+    *(BYTE*)(0x570234 + BaseAddress9) =
+        DirtyMenuValues[DirtyMenuPosition];
+}
 static bool CoinPressed = false;
 static bool NameEntryHack;
 static BYTE GameState;
@@ -1953,18 +2016,70 @@ DWORD WINAPI InputRT9(LPVOID lpParam)
 		}
 		BYTE Chosen = *(BYTE*)(0x5705E8 + BaseAddress9);
 
-		if (GameState == 0x05)
-		{
-			if (!MenuHack)
-			{
-				MenuHack = true;
-				injector::MakeNOP((0x78A27 + BaseAddress9), 6, true);
-			}
-		}
-		else if (GameState == 0x06 || GameState == 0x08 || GameState == 0x12)
-		{
-			if (MenuHack)
-			{
+	if (GameState == 0x05)
+{
+    if (!MenuHack)
+    {
+        MenuHack = true;
+        MenuHackStopWriting = false;
+
+        BYTE currentMenuValue =
+            *(BYTE*)(0x570234 + BaseAddress9);
+
+        int existingPosition =
+            DirtyMenuValueToPosition(currentMenuValue);
+
+        if (existingPosition >= 0)
+        {
+            DirtyMenuPosition = existingPosition;
+        }
+        else
+        {
+            DirtyMenuPosition =
+                DirtyWheelToMenuPosition(*ffbOffset2);
+        }
+
+        DirtyMenuLeftWasDown =
+            (GetAsyncKeyState('A') & 0x8000) != 0;
+
+        DirtyMenuRightWasDown =
+            (GetAsyncKeyState('D') & 0x8000) != 0;
+
+        injector::MakeNOP(
+            (0x78A27 + BaseAddress9),
+            6,
+            true
+        );
+
+        DirtyWriteMenuPosition();
+    }
+}
+else if (
+    GameState == 0x06 ||
+    GameState == 0x08 ||
+    GameState == 0x12)
+{
+    if (MenuHack)
+    {
+        MenuHack = false;
+        MenuHackStopWriting = false;
+
+        DirtyMenuLeftWasDown = false;
+        DirtyMenuRightWasDown = false;
+
+        injector::WriteMemory(
+            (0x78A27 + BaseAddress9),
+            0x03448689,
+            true
+        );
+
+        injector::WriteMemory(
+            (0x78A2B + BaseAddress9),
+            0x8E890000,
+            true
+        );
+    }
+}
 				MenuHack = false;
 				MenuHackStopWriting = false;
 
@@ -1973,77 +2088,49 @@ DWORD WINAPI InputRT9(LPVOID lpParam)
 			}
 		}
 
-		if (MenuHack)
-		{
-			if (Chosen == 0x01)
-			{
-				MenuHackStopWriting = true;
-			}
+if (MenuHack)
+{
+    if (Chosen == 0x01)
+    {
+        MenuHackStopWriting = true;
+    }
 
-			if (!MenuHackStopWriting)
-			{
-				if (*ffbOffset2 >= 0xEE)
-				{
-					*(BYTE*)(0x570234 + BaseAddress9) = 0x0A;
-				}
-				else if (*ffbOffset2 >= 0xDD)
-				{
-					*(BYTE*)(0x570234 + BaseAddress9) = 0x0C;
-				}
-				else if (*ffbOffset2 >= 0xCC)
-				{
-					*(BYTE*)(0x570234 + BaseAddress9) = 0x08;
-				}
-				else if (*ffbOffset2 >= 0xBB)
-				{
-					*(BYTE*)(0x570234 + BaseAddress9) = 0x0D;
-				}
-				else if (*ffbOffset2 >= 0xAA)
-				{
-					*(BYTE*)(0x570234 + BaseAddress9) = 0x0E;
-				}
-				else if (*ffbOffset2 >= 0x99)
-				{
-					*(BYTE*)(0x570234 + BaseAddress9) = 0x09;
-				}
-				else if (*ffbOffset2 >= 0x88)
-				{
-					*(BYTE*)(0x570234 + BaseAddress9) = 0x0B;
-				}
-				else if (*ffbOffset2 >= 0x77)
-				{
-					*(BYTE*)(0x570234 + BaseAddress9) = 0x02;
-				}
-				else if (*ffbOffset2 >= 0x66)
-				{
-					*(BYTE*)(0x570234 + BaseAddress9) = 0x00;
-				}
-				else if (*ffbOffset2 >= 0x55)
-				{
-					*(BYTE*)(0x570234 + BaseAddress9) = 0x04;
-				}
-				else if (*ffbOffset2 >= 0x44)
-				{
-					*(BYTE*)(0x570234 + BaseAddress9) = 0x06;
-				}
-				else if (*ffbOffset2 >= 0x33)
-				{
-					*(BYTE*)(0x570234 + BaseAddress9) = 0x05;
-				}
-				else if (*ffbOffset2 >= 0x22)
-				{
-					*(BYTE*)(0x570234 + BaseAddress9) = 0x03;
-				}
-				else if (*ffbOffset2 >= 0x11)
-				{
-					*(BYTE*)(0x570234 + BaseAddress9) = 0x01;
-				}
-				else if (*ffbOffset2 >= 0x00)
-				{
-					*(BYTE*)(0x570234 + BaseAddress9) = 0x10;
-				}
-			}
-		}
+    const bool leftDown =
+        (GetAsyncKeyState('A') & 0x8000) != 0;
+
+    const bool rightDown =
+        (GetAsyncKeyState('D') & 0x8000) != 0;
+
+    if (!MenuHackStopWriting)
+    {
+        if (
+            leftDown &&
+            !DirtyMenuLeftWasDown &&
+            !rightDown)
+        {
+            if (DirtyMenuPosition > 0)
+            {
+                --DirtyMenuPosition;
+            }
+        }
+
+        if (
+            rightDown &&
+            !DirtyMenuRightWasDown &&
+            !leftDown)
+        {
+            if (DirtyMenuPosition < 14)
+            {
+                ++DirtyMenuPosition;
+            }
+        }
+
+        DirtyWriteMenuPosition();
+    }
+
+    DirtyMenuLeftWasDown = leftDown;
+    DirtyMenuRightWasDown = rightDown;
+}
 
 		if (GameState == 0x09)
 			NameScreenInput(0);
