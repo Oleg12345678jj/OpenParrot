@@ -46,6 +46,10 @@ static int DirtyMenuPosition = 7;
 static bool DirtyMenuLeftWasDown = false;
 static bool DirtyMenuRightWasDown = false;
 
+static bool DirtyCarTuningHoldActive = false;
+static BYTE DirtyCarTuningLastState = 0xFF;
+static int DirtyCarTuningWheel = 128;
+
 static const BYTE DirtyMenuValues[15] =
 {
     0x10,
@@ -2215,7 +2219,50 @@ if (MenuHack)
 				button2pressed = false;
 			}
 		}
+// CAR + TUNING KEYBOARD HOLD
+// 0x06 = car selection
+// 0x08 = tuning selection
 
+if (GameState == 0x06 || GameState == 0x08)
+{
+    if (!DirtyCarTuningHoldActive ||
+        DirtyCarTuningLastState != GameState)
+    {
+        DirtyCarTuningHoldActive = true;
+        DirtyCarTuningLastState = GameState;
+        DirtyCarTuningWheel = 128;
+    }
+
+    const bool leftDown =
+        (GetAsyncKeyState('A') & 0x8000) != 0;
+
+    const bool rightDown =
+        (GetAsyncKeyState('D') & 0x8000) != 0;
+
+    if (leftDown && !rightDown)
+    {
+        DirtyCarTuningWheel -= 10;
+
+        if (DirtyCarTuningWheel < 0)
+            DirtyCarTuningWheel = 0;
+    }
+    else if (rightDown && !leftDown)
+    {
+        DirtyCarTuningWheel += 10;
+
+        if (DirtyCarTuningWheel > 255)
+            DirtyCarTuningWheel = 255;
+    }
+
+    *ffbOffset2 = DirtyCarTuningWheel;
+}
+else
+{
+    DirtyCarTuningHoldActive = false;
+    DirtyCarTuningLastState = 0xFF;
+}
+
+		
 		// WHEEL
 		if ((GameState == 0x06) && (*ffbOffset2 > 0x60 && *ffbOffset2 < 0x70))
 		{
